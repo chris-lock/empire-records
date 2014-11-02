@@ -3,8 +3,8 @@ require_relative 'command_line_utility'
 require 'optparse'
 
 class CommandLineTool < CommandLineUtility
-	@@command_format = ''
-	@executing_file_name = ''
+	@@command_format
+	@executing_file_name
 
 	def initialize(current_file)
 		@executing_file_name = File.basename(current_file)
