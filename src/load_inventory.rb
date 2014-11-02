@@ -4,7 +4,8 @@ require_relative 'inventory'
 require 'csv'
 
 class LoadInventory < CommandLineTool
-	@file_name
+	@@command_format = '[file]'
+	@file_name = ''
 	@line_number = 1
 
 	def run(file_name)
@@ -23,7 +24,7 @@ class LoadInventory < CommandLineTool
 
 		if self.respond_to?(parse_method)
 			Inventory.new.add(
-				send(parse_method)
+				self.send(parse_method)
 			)
 		else
 			raise_file_type_error(file_extension)
@@ -34,7 +35,7 @@ class LoadInventory < CommandLineTool
 		return get_albums(
 			File.open(@file_name),
 			[
-				'quanitity',
+				'quantity',
 				'format',
 				'release_year',
 				'artist',
@@ -45,25 +46,20 @@ class LoadInventory < CommandLineTool
 	end
 
 	def parse_pipe_line(line)
-		return line.split('|')
+		return line.split(' | ')
 	end
 
 	def get_albums(lines, labels, parse_line_method)
-		albums = []
-		@line_number = 1
+		@line_number = 0
 
-		lines.each do |line|
-			albums.push(
-				get_album(
-					labels,
-					send(parse_line_method, line)
-				)
-			)
-
+		return lines.collect do |line|
 			@line_number += 1
-		end
 
-		return albums
+			get_album(
+				labels,
+				self.send(parse_line_method, line)
+			)
+		end
 	end
 
 	def get_album(labels, values)
@@ -71,13 +67,7 @@ class LoadInventory < CommandLineTool
 			raise_parse_error('Not enough values for album')
 		end
 
-		stripped_values = []
-
-		values.each do |value|
-			stripped_values.push(value.strip)
-		end
-
-		return(Hash[labels.zip(stripped_values)])
+		return(Hash[labels.zip(values)])
 	end
 
 	def raise_parse_error(error)
@@ -107,8 +97,6 @@ class LoadInventory < CommandLineTool
 	end
 
 	def get_albums_with_quantity(albums)
-		albums_with_quantity = []
-
 		grouped_ablums = albums.group_by do |album|
 			[
 				album['artist'],
@@ -117,14 +105,12 @@ class LoadInventory < CommandLineTool
 			]
 		end
 
-		grouped_ablums.each do |grouped_values, albums|
+		return grouped_ablums.collect do |grouped_values, albums|
 			album = albums[0]
-			album['quanitity'] = albums.length.to_s
+			album['quantity'] = albums.length.to_s
 
-			albums_with_quantity.push(album)
+			album
 		end
-
-		return albums_with_quantity
 	end
 
 	def raise_file_type_error(file_extension)
