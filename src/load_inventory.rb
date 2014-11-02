@@ -5,13 +5,13 @@ require 'csv'
 
 class LoadInventory < CommandLineTool
 	@@command_format = '[file]'
-	@file_name = ''
-	@line_number = 1
+	@file_name
+	@line_number
 
 	def run(file_name)
 		@file_name = file_name
 
-		if File.exists?(@file_name)
+		if (File.exists?(@file_name))
 			parse_file()
 		else
 			raise_file_error()
@@ -22,7 +22,7 @@ class LoadInventory < CommandLineTool
 		file_extension = File.extname(@file_name)
 		parse_method = file_extension.sub('.', 'parse_')
 
-		if self.respond_to?(parse_method)
+		if (self.respond_to?(parse_method))
 			Inventory.new.add(
 				self.send(parse_method)
 			)
@@ -46,7 +46,7 @@ class LoadInventory < CommandLineTool
 	end
 
 	def parse_pipe_line(line)
-		return line.split(' | ')
+		return line.strip().split(' | ')
 	end
 
 	def get_albums(lines, labels, parse_line_method)
