@@ -5,8 +5,8 @@ require 'csv'
 
 class LoadInventory < CommandLineTool
 	@@command_format = '[file]'
-	@file_name
-	@line_number
+	@file_name = ''
+	@line_number = 1
 
 	def run(file_name)
 		@file_name = file_name
@@ -23,7 +23,7 @@ class LoadInventory < CommandLineTool
 		parse_method = file_extension.sub('.', 'parse_')
 
 		if (self.respond_to?(parse_method))
-			Inventory.new.add(
+			Inventory.new().add(
 				self.send(parse_method)
 			)
 		else
@@ -35,11 +35,11 @@ class LoadInventory < CommandLineTool
 		return get_albums(
 			File.open(@file_name),
 			[
-				'quantity',
-				'format',
-				'release_year',
-				'artist',
-				'title'
+				'Quantity',
+				'Format',
+				'ReleaseYear',
+				'Artist',
+				'Title'
 			],
 			'parse_pipe_line'
 		)
@@ -82,10 +82,10 @@ class LoadInventory < CommandLineTool
 			get_albums(
 				CSV.parse(File.read(@file_name)),
 				[
-					'artist',
-					'title',
-					'format',
-					'release_year'
+					'Artist',
+					'Title',
+					'Format',
+					'ReleaseYear'
 				],
 				'parse_csv_line'
 			)
@@ -97,30 +97,31 @@ class LoadInventory < CommandLineTool
 	end
 
 	def get_albums_with_quantity(albums)
-		grouped_ablums = albums.group_by do |album|
+		grouped_albums = albums.group_by do |album|
 			[
-				album['artist'],
-				album['title'],
-				album['format']
+				album['Artist'],
+				album['Title'],
+				album['Format'],
+				album['ReleaseYear']
 			]
 		end
 
-		return grouped_ablums.collect do |grouped_values, albums|
+		return grouped_albums.collect do |grouped_values, albums|
 			album = albums[0]
-			album['quantity'] = albums.length.to_s
+			album['Quantity'] = albums.length.to_s
 
 			album
 		end
 	end
 
 	def raise_file_type_error(file_extension)
-		raise_error(
+		raise_usage_error(
 			"Sorry, #{bold(red(file_extension))} files are not supported."
 		)
 	end
 
 	def raise_file_error()
-		raise_error(
+		raise_usage_error(
 			"#{bold(red(@file_name))} is not a file."
 		)
 	end
