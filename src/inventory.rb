@@ -78,7 +78,6 @@ class Inventory < CommandLineUtility
 	end
 
 	def db_send(method, statement, values)
-		puts statement, values, ''
 		result = @db.send(method, statement, values)
 
 		rescue SQLite3::Exception => exception
@@ -234,10 +233,18 @@ class Inventory < CommandLineUtility
 		insert_hash = {}
 
 		item_hash.each do |key, values|
-			insert_hash[key] = values[0]
+			insert_hash[key] = get_clean_insert_hash_value(key, values[0])
 		end
 
 		return insert_hash
+	end
+
+	def get_clean_insert_hash_value(key, value)
+		if (key == 'Format')
+			value = value.downcase
+		end
+
+		return value
 	end
 
 	def insert_item(table, insert_hash)
@@ -351,10 +358,10 @@ class Inventory < CommandLineUtility
 	end
 
 	def get(column, value)
-		puts(column, value)
+		abort(column, value)
 	end
 
 	def remove(id)
-		puts(id)
+		abort(id)
 	end
 end
