@@ -8,13 +8,13 @@ class Inventory < CommandLineUtility
 	DB_PATH = CURRENT_DIR + '/inventory.db'
 	DB_TABLES = {
 		'Artists' => [
-			'Id INTEGER PRIMARY KEY AUTOINCREMENT',
-			'Name VARCHAR COLLATE NOCASE UNIQUE'
+			'ArtistId INTEGER PRIMARY KEY AUTOINCREMENT',
+			'Artist VARCHAR COLLATE NOCASE UNIQUE'
 		],
 		'Albums' => [
-			'Id INTEGER PRIMARY KEY AUTOINCREMENT',
+			'AlbumId INTEGER PRIMARY KEY AUTOINCREMENT',
 			'ArtistId INTEGER',
-			'Name VARCHAR COLLATE NOCASE',
+			'Title VARCHAR COLLATE NOCASE',
 			'ReleaseYear INTEGER'
 		],
 		'Inventory' => [
@@ -24,25 +24,16 @@ class Inventory < CommandLineUtility
 			'Quantity INTEGER'
 		]
 	}
+	SEARCH_HASH = {
+		'id' => 'Id',
+		'artist' => 'Artist',
+		'title' => 'Title',
+		'format' => 'Format',
+		'release_year' => 'ReleaseYear',
+		'quantity' => 'Quantity'
+	}
 
 	@db
-	@search_map = {
-		'artist' => {
-			'Artists' => 'Name'
-		},
-		'title' => {
-			'Albums' => 'Name'
-		},
-		'format' => {
-			'Inventory' => 'Format'
-		},
-		'release_year' => {
-			'Albums' => 'ReleaseYear'
-		},
-		'id' => {
-			'Inventory' => 'Id'
-		}
-	}
 
 	def initialize()
 		return (!is_setup()) ?
@@ -64,11 +55,14 @@ class Inventory < CommandLineUtility
 		end
 
 		open().execute_batch(tables.join(';'))
+		close()
 	end
 
 	def open()
-		@db = SQLite3::Database.open(DB_PATH)
-		@db.results_as_hash = true
+		if (!@db || @db.closed?)
+			@db = SQLite3::Database.open(DB_PATH)
+			@db.results_as_hash = true
+		end
 
 		return self
 	end
@@ -90,21 +84,18 @@ class Inventory < CommandLineUtility
 	end
 
 	def add(albums)
-		add_quantity(get_albums_with_ids(albums))
-
+		open().add_quantity(get_albums_with_ids(albums))
 		close()
 	end
 
 	def get_albums_with_ids(albums)
 		unique_albums = get_unique_albums(albums)
-		artist_ids = get_artist_ids(
-			get_unique_artists(unique_albums)
-		)
+		artist_ids = get_artist_ids(get_unique_artists(unique_albums))
 		album_ids = get_album_ids(
 			replace_album_keys(
 				unique_albums,
 				[
-					{'artist' => artist_ids}
+					{'Artist' => artist_ids}
 				]
 			)
 		)
@@ -112,8 +103,8 @@ class Inventory < CommandLineUtility
 		return replace_album_keys(
 			albums,
 			[
-				{'artist' => artist_ids},
-				{'title' => album_ids}
+				{'Artist' => artist_ids},
+				{'Title' => album_ids}
 			]
 		)
 	end
@@ -122,8 +113,8 @@ class Inventory < CommandLineUtility
 		unique_albums = albums.collect do |album|
 			unique_album = album.clone
 
-			unique_album.delete('format')
-			unique_album.delete('quantity')
+			unique_album.delete('Format')
+			unique_album.delete('Quantity')
 
 			unique_album
 		end
@@ -133,7 +124,7 @@ class Inventory < CommandLineUtility
 
 	def get_unique_artists(albums)
 		unique_artists = albums.collect do |album|
-			{'artist' => album['artist']}
+			{'Artist' => album['Artist']}
 		end
 
 		return unique_artists.uniq
@@ -144,53 +135,52 @@ class Inventory < CommandLineUtility
 			artists,
 			'Artists',
 			{
-				'Name' => [
-					'artist'
+				'Artist' => [
+					'Artist'
 				]
 			},
-			'artist'
+			'Artist',
+			'ArtistId'
 		)
 	end
 
-	def get_item_ids(items, table, map, item_column)
+	def get_item_ids(items, table, column_hash, item_column, item_id)
 		ids = {}
 
 		items.each do |item|
-			item_hash = get_item_hash(item, map)
+			item_hash = get_item_hash(item, column_hash)
 
-			id = get_item_id(table, item_hash)
+			id = get_item_id(table, item_hash, item_id)
 
 			ids[item[item_column]] = (id.to_s.empty?) ?
-				insert_item(table, get_insert_hash(item_hash)) :
+				insert(table, get_insert_hash(item_hash)) :
 				id
 		end
 
 		return ids
 	end
 
-	def get_item_hash(item, map)
+	def get_item_hash(item, column_hash)
 		item_hash = {}
 
-		map.each do |map_key, item_keys|
-			item_hash[map_key] = []
-
-			item_keys.each do |item_key|
-				item_hash[map_key].push(item[item_key])
+		column_hash.each do |column, item_keys|
+			item_hash[column] = item_keys.collect do |item_key|
+				item[item_key]
 			end
 		end
 
 		return item_hash
 	end
 
-	def get_item_id(table, item_hash)
-		item = select_item(table, item_hash, 'Id')
+	def get_item_id(table, item_hash, item_id)
+		item = select(table, item_hash, item_id)
 
 		return (item.length > 0) ?
-			item[0]['Id'] :
+			item[0][item_id] :
 			''
 	end
 
-	def select_item(table, where_hash, select_columns = '*')
+	def select(table, where_hash, select_columns = '*')
 		return execute(
 			"SELECT #{select_columns} " +
 			"FROM #{table} " +
@@ -241,13 +231,13 @@ class Inventory < CommandLineUtility
 
 	def get_clean_insert_hash_value(key, value)
 		if (key == 'Format')
-			value = value.downcase
+			value = value.capitalize
 		end
 
 		return value
 	end
 
-	def insert_item(table, insert_hash)
+	def insert(table, insert_hash)
 		columns = insert_hash.keys
 
 		execute(
@@ -277,38 +267,39 @@ class Inventory < CommandLineUtility
 			albums,
 			'Albums',
 			{
-				'Name' => [
-					'title'
+				'Title' => [
+					'Title'
 				],
 				'ArtistId' => [
-					'artist'
+					'Artist'
 				],
 				'ReleaseYear' => [
-					'release_year'
+					'ReleaseYear'
 				]
 			},
-			'title'
+			'Title',
+			'AlbumId'
 		)
 	end
 
 	def add_quantity(albums)
-		album_map = {
+		column_hash = {
 			'AlbumId' => [
-				'title'
+				'Title'
 			],
 			'Format' => [
-				'format'
+				'Format'
 			]
 		}
 
 		albums.each do |album|
-			album_hash = get_item_hash(album, album_map)
-			inventory = select_item('Inventory', album_hash, 'Quantity')
+			album_hash = get_item_hash(album, column_hash)
+			inventory = select('Inventory', album_hash, 'Quantity')
 
 			insert_or_update_inventory(
 				inventory,
 				get_insert_hash(album_hash),
-				album['quantity'].to_i
+				album['Quantity'].to_i
 			)
 		end
 	end
@@ -319,14 +310,14 @@ class Inventory < CommandLineUtility
 				'Quantity' => quantity + inventory[0]['Quantity']
 			}
 
-			update_item('Inventory', album_update_hash, album_insert_hash)
+			update('Inventory', album_update_hash, album_insert_hash)
 		else
 			album_insert_hash['Quantity'] = quantity
-			insert_item('Inventory', album_insert_hash)
+			insert('Inventory', album_insert_hash)
 		end
 	end
 
-	def update_item(table, update_hash, where_hash)
+	def update(table, update_hash, where_hash)
 		return execute(
 			"UPDATE #{table} " +
 			"SET #{get_set_statement(update_hash)}" +
@@ -352,16 +343,59 @@ class Inventory < CommandLineUtility
 	end
 
 	def close()
-		if (@db)
+		if (!@db.closed?)
 			@db.close()
 		end
 	end
 
-	def get(column, value)
-		abort(column, value)
+	def get(id)
+		inventory = open().get_inventory({'Id' => [id]})
+		close()
+
+		return (inventory && inventory.length > 0) ?
+			inventory[0] :
+			false
 	end
 
-	def remove(id)
-		abort(id)
+	def get_inventory(where_hash)
+		return select_all(
+			get_where_statement(where_hash),
+			get_where_values(where_hash)
+		)
+	end
+
+	def select_all(where_statement, where_values)
+		return execute(
+			"SELECT #{SEARCH_HASH.values.join(',')} " +
+			"FROM Artists " +
+			"NATURAL JOIN Albums " +
+			"NATURAL JOIN Inventory " +
+			"WHERE #{where_statement}",
+			where_values
+		)
+	end
+
+	def remove(id, quantity)
+		 open().execute(
+			"UPDATE Inventory " +
+			"SET Quantity = Quantity - ? " +
+			"WHERE Id = ?",
+			[quantity, id]
+		)
+		close()
+	end
+
+	def is_search_field(column)
+		return SEARCH_HASH.has_key?(column)
+	end
+
+	def search(column, value)
+		results = open().select_all(
+			"#{column} like ? AND Quantity > 0",
+			["%#{value}%"]
+		)
+		close()
+
+		return results
 	end
 end
