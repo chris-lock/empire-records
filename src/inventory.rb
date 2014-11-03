@@ -30,12 +30,30 @@ class Inventory < CommandLineUtility
 	}
 	# @constant the map of search field names to columns
 	SEARCH_HASH = {
-		'id' => 'Id',
-		'artist' => 'Artist',
-		'title' => 'Title',
-		'format' => 'Format',
-		'release_year' => 'ReleaseYear',
-		'quantity' => 'Quantity'
+		'id' => {
+			'column' => 'Id',
+			'order' => 'ASC'
+		},
+		'artist' => {
+			'column' => 'Artist',
+			'order' => 'ASC'
+		},
+		'title' => {
+			'column' => 'Title',
+			'order' => 'ASC'
+		},
+		'format' => {
+			'column' => 'Format',
+			'order' => 'DESC'
+		},
+		'release_year' => {
+			'column' => 'ReleaseYear',
+			'order' => 'DESC'
+		},
+		'quantity' => {
+			'column' => 'Quantity',
+			'order' => 'ASC'
+		}
 	}
 
 	# @type {object} The sqlite database
@@ -610,15 +628,21 @@ class Inventory < CommandLineUtility
 	#
 	# @param {string} where_statement The where statement to use
 	# @param {string} where_values The values to substitute in the where statement
+	# @param {string} order_by_statment The optional order_by statement to use
 	# @return {array} The albums found
 	#
-	def select_all(where_statement, where_values)
+	def select_all(where_statement, where_values, order_by_statment = '')
+		columns = SEARCH_HASH.collect do |field_name, properties|
+			properties['column']
+		end
+
 		return execute(
-			"SELECT #{SEARCH_HASH.values.join(',')} " +
+			"SELECT #{columns.join(',')} " +
 			"FROM Artists " +
 			"NATURAL JOIN Albums " +
 			"NATURAL JOIN Inventory " +
-			"WHERE #{where_statement}",
+			"WHERE #{where_statement} " +
+			"#{order_by_statment}",
 			where_values
 		)
 	end
@@ -639,28 +663,40 @@ class Inventory < CommandLineUtility
 		close()
 	end
 	##
-	# Checks if a column is a valid search field
+	# Checks if a field_name is a valid search field
 	#
-	# @param {string} column The column to check
-	# @return {bool} The column is a valid search field
+	# @param {string} field_name The field_name to check
+	# @return {bool} The field_name is a valid search field
 	#
-	def is_search_field(column)
-		return SEARCH_HASH.has_key?(column)
+	def is_search_field(field_name)
+		return SEARCH_HASH.has_key?(field_name)
 	end
 	##
-	# Searches a given column for a given value using fuzzy search.
+	# Searches a given field_name for a given value using fuzzy search.
 	#
-	# @param {string} column The column to search
+	# @param {string} field_name The field_name to search
 	# @param {string} value The value to search for
 	# @return {array} The matches found
 	#
-	def search(column, value)
+	def search(field_name, value)
+		search_field = SEARCH_HASH[field_name]
+		column = search_field['column']
+
 		results = open().select_all(
-			"#{SEARCH_HASH[column]} like ? AND Quantity > 0",
-			["%#{value}%"]
+			"#{column} like ? AND Quantity > 0",
+			["%#{value}%"],
+			"ORDER BY #{column} #{search_field['order']}"
 		)
 		close()
 
 		return results
+	end
+	##
+	# Gets all the valid search fields.
+	#
+	# @return {array} The search fields
+	#
+	def get_search_fields()
+		return SEARCH_HASH.keys
 	end
 end

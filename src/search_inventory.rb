@@ -113,7 +113,10 @@ class SearchInventory < CommandLineTool
 	# @returns {void}
 	#
 	def raise_invalid_field_name_error(field_name)
-		raise_error("#{bold(field_name)} is not a valid field name.")
+		raise_error(
+			"#{bold(field_name)} is not a valid field name.\n" +
+			"Please use: #{@inventory.get_search_fields().join(', ')}"
+		)
 	end
 end
 
